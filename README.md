@@ -1,7 +1,7 @@
 # Effective Estimation of Deep Generative Language Models
 
 ## Overview
-This repository contains the code needed to run the experiments presented in the paper [Effective Estimation of Deep Generative Language Models](https://arxiv.org/abs/1904.08194)[[1 ]](https://github.com/tom-pelsmaeker/deep-generative-lm#citation).
+This repository contains the code needed to run the experiments presented in the paper [Effective Estimation of Deep Generative Language Models](https://arxiv.org/abs/1904.08194) [[1]](https://github.com/tom-pelsmaeker/deep-generative-lm#citation).
 
 ## Setup
 To start experimenting, clone the repository to your local device and install the following dependencies:
@@ -11,7 +11,7 @@ To start experimenting, clone the repository to your local device and install th
 - [__torch_two_sample__](https://github.com/josipd/torch-two-sample)
 
 ## Quick Start
-1. Download and pre-process the Penn Treebank data, see the [data folder](https://github.com/tom-pelsmaeker/deep-generative-lm/dataset/).
+1. Download and pre-process the Penn Treebank data, see the [data folder](https://github.com/tom-pelsmaeker/deep-generative-lm/tree/master/dataset).
 2. Train a RNNLM:
 ```
 ./main.py --model deterministic --mode train --pre_def 1 --ptb_type mik
@@ -44,14 +44,14 @@ To start experimenting, clone the repository to your local device and install th
 ```
 
 ## Structure
-- [main.py](https://github.com/tom-pelsmaeker/deep-generative-lm/main.py): the main script that handles all command line arguments.
-- [dataset](https://github.com/tom-pelsmaeker/deep-generative-lm/dataset/): expected location of data. Contains code for preprocessing and batching PTB.
-- [model](https://github.com/tom-pelsmaeker/deep-generative-lm/model/): all components for the various models tested in the paper.
-- [scripts](https://github.com/tom-pelsmaeker/deep-generative-lm/scripts/): various scripts for training/testing/BayesOpt, etcetera.
-- [util](https://github.com/tom-pelsmaeker/deep-generative-lm/util/): utility functions for storage, evaluation and more.
+- [main.py](https://github.com/tom-pelsmaeker/deep-generative-lm/blob/master/main.py): the main script that handles all command line arguments.
+- [dataset](https://github.com/tom-pelsmaeker/deep-generative-lm/tree/master/dataset): expected location of data. Contains code for preprocessing and batching PTB.
+- [model](https://github.com/tom-pelsmaeker/deep-generative-lm/tree/master/model/): all components for the various models tested in the paper.
+- [scripts](https://github.com/tom-pelsmaeker/deep-generative-lm/tree/master/scripts/): various scripts for training/testing/BayesOpt, etcetera.
+- [util](https://github.com/tom-pelsmaeker/deep-generative-lm/tree/master/util/): utility functions for storage, evaluation and more.
 
 ## Settings
-There are many command line settings available to tweak the experimental setup. Please see the [settings file](https://github.com/tom-pelsmaeker/deep-generative-lm/util/settings.py) for a complete overview. Here, we will highlight the most important settings:
+There are many command line settings available to tweak the experimental setup. Please see the [settings file](https://github.com/tom-pelsmaeker/deep-generative-lm/blob/master/util/settings.py) for a complete overview. Here, we will highlight the most important settings:
 ```
 --script: [generative|bayesopt|grid] chooses which script to run. generative is used for training/testing a single model, bayesopt and grid run Bayesian Optimization and Grid search respectively. Please see the scripts for more information about their usage.
 --mode: [train|test|novelty|qualitative] select in which mode to run the generative script.
