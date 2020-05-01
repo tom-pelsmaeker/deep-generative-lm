@@ -1,13 +1,11 @@
 #!/usr/bin/env python3
 """These scripts can be used to train and test various generative models of language."""
-
+import os
 import os.path as osp
 import sys
-import logging
 import time
 from warnings import warn
 from collections import defaultdict
-import pickle
 
 import numpy as np
 import torch
@@ -20,12 +18,15 @@ toplevel_path = osp.abspath(osp.join(osp.dirname(__file__), '..'))
 if toplevel_path not in sys.path:
     sys.path.insert(1, toplevel_path)
 
-from dataset.text import sort_collate, sort_pad_collate  # noqa: E402
+from dataset.text import sort_pad_collate  # noqa: E402
 from util.statistics import StatsHandler  # noqa: E402
 from util.storage import seed, initialize_model, initialize_dataloader, save_checkpoint, load_checkpoint, load_model, save_samples, load_word_index_maps, load_options, save_novelties  # noqa: E402
-from util.evaluation import compute_accuracy, compute_perplexity, get_samples, compute_bleu, compute_active_units, compute_ter, compute_novelty, AdaptiveRate, compute_mutual_information  # noqa: E402
+from util.evaluation import compute_accuracy, compute_perplexity, get_samples, compute_bleu, compute_active_units, compute_ter, compute_novelty, compute_mutual_information  # noqa: E402
 from util.error import UnknownArgumentError, InvalidPathError, NoModelError, Error  # noqa: E402
-from util.display import vprint, print_flags  # noqa: E402
+from util.display import vprint  # noqa: E402
+
+__author__ = "Tom Pelsmaeker"
+__copyright__ = "Copyright 2020"
 
 
 def train(opt):
@@ -57,14 +58,14 @@ def train(opt):
     optimizers = []
     if opt.sparse:
         sparse_parameters = [p[1] for p in filter(lambda p: p[0] == "emb.weight", decoder.named_parameters())]
-        parameters = [p[1] for p in filter(lambda p: p[1].requires_grad and p[0] !=
-                                           "emb.weight", decoder.named_parameters())]
+        parameters = [p[1] for p in filter(lambda p: p[1].requires_grad and p[0]
+                                           != "emb.weight", decoder.named_parameters())]
         optimizers.append(Adam(parameters, opt.lr))
         optimizers.append(SparseAdam(sparse_parameters, opt.lr))
     elif opt.lagrangian:
         lag_parameters = [p[1] for p in filter(lambda p: p[0] == "lag_weight", decoder.named_parameters())]
-        parameters = [p[1] for p in filter(lambda p: p[1].requires_grad and p[0] !=
-                                           "lag_weight.weight", decoder.named_parameters())]
+        parameters = [p[1] for p in filter(lambda p: p[1].requires_grad and p[0]
+                                           != "lag_weight.weight", decoder.named_parameters())]
         optimizers.append(Adam(parameters, opt.lr))
         optimizers.append(RMSprop(lag_parameters, opt.lr))
     else:
@@ -77,9 +78,6 @@ def train(opt):
 
     # The SummaryWriter will log certain values for automatic visualization
     writer = SummaryWriter(osp.join(opt.out_folder, opt.model, opt.save_suffix, 'train'))
-
-    # AdaptiveRate will automatically adapt the rate in a model if turned on
-    adapt_rate = AdaptiveRate(opt)
 
     # The StatsHandler object will store important stastics during training and provides printing and logging utilities
     stats = StatsHandler(opt)
@@ -97,7 +95,7 @@ def train(opt):
 
         start = time.time()
         for data in data_train:
-            # We zero the gradients BEFORE the forward pass, instead of before the backward, to hopefully save some memory
+            # We zero the gradients BEFORE the forward pass, instead of before the backward, to save some memory
             [optimizer.zero_grad() for optimizer in optimizers]
 
             # We skip the remainder batch
@@ -111,8 +109,7 @@ def train(opt):
 
             # Forward
             losses, pred = decoder(data)
-            adapt_rate(losses, decoder)
-            loss = sum([v for k, v in losses.items() if k not in ["Lag_Weight"]])
+            loss = sum([v for k, v in losses.items() if "Lag_Weight" not in k and "Constraint_" not in k])
 
             # Log the various losses the models can return, and accuracy
             stats.train_loss.append(losses["NLL"].item())
@@ -122,8 +119,9 @@ def train(opt):
             stats.train_l2_loss.append(losses["L2"].item())
             stats.train_mmd.append(losses["MMD"].item())
             stats.train_acc.append(compute_accuracy(pred, data).item())
-            stats.constraint.append(losses["Constraint"].item())
-            stats.lamb.append(losses["Lag_Weight"].item())
+            for i in range(len(opt.constraint)):
+                stats.constraints[i].append(losses["Constraint_{}".format(i)].item())
+                stats.lambs[i].append(losses["Lag_Weight_{}".format(i)].item())
             del data
 
             loss.backward()
@@ -248,7 +246,7 @@ def train(opt):
                 prev_crit[i] = stats.val_rec_elbo
             i += 1
 
-        # We early stop the model when an estimate of the log-likelihood based on samples from the prior no longer increases
+        # We early stop the model when an estimate of the log-likelihood based on prior samples no longer increases
         # This generally only makes sense when we have a learned prior
         if 'prior' in opt.criteria:
             if stats.val_loss > (prev_crit[i] - opt.min_imp) and epoch > 4:
@@ -362,8 +360,9 @@ def test(opt):
             stats.val_rec_mmd.append(losses["MMD"].item())
             stats.val_rec_acc.append(compute_accuracy(pred, data).item())
             stats.val_rec_log_loss[0].append(losses["NLL"].item() + losses["KL"].item())
-            stats.lamb.append(losses["Lag_Weight"].item())
-            stats.constraint.append(losses["Constraint"].item())
+            for i in range(len(opt.constraint)):
+                stats.constraints[i].append(losses["Constraint_{}".format(i)].item())
+                stats.lambs[i].append(losses["Lag_Weight_{}".format(i)].item())
 
         # Stack the collected samples and parameters
         mu = torch.cat(mus, 0)
@@ -397,14 +396,15 @@ def test(opt):
 
             print("Computing Novelty....")
             # Novelty is minimum TER of a generated sentence compared with the training corpus
-            stats.val_novelty, _ = compute_novelty(get_samples(opt, decoder, idx_to_word,
-                                                               word_to_idx)[1], osp.join(opt.data_folder, opt.train_file), opt, idx_to_word)
+            stats.val_novelty, _ = compute_novelty(get_samples(opt, decoder, idx_to_word, word_to_idx)[1],
+                                                   osp.join(opt.data_folder, opt.train_file),
+                                                   opt, idx_to_word)
 
         if opt.log_likelihood and opt.model != 'deterministic':
             repeat = max(int(opt.ll_samples / opt.ll_batch), 1)
             opt.ll_batch = opt.ll_samples if opt.ll_samples < opt.ll_batch else opt.ll_batch
-            normalizer = torch.log(torch.tensor(int(opt.ll_samples / opt.ll_batch) *
-                                                opt.ll_batch, device=opt.device, dtype=torch.float))
+            normalizer = torch.log(torch.tensor(int(opt.ll_samples / opt.ll_batch)
+                                                * opt.ll_batch, device=opt.device, dtype=torch.float))
             stats.val_nll = []
             for i, data in enumerate(data_test):
                 if i % 100 == 0:
@@ -463,8 +463,8 @@ def novelty(opt):
 
     with torch.no_grad():
         # Novelty is inverse TER of a generated sentence compared with the training corpus
-        novelty, full_scores = compute_novelty(get_samples(opt, decoder, idx_to_word,
-                                                           word_to_idx), osp.join(opt.data_folder, opt.train_file), opt, idx_to_word)
+        novelty, full_scores = compute_novelty(get_samples(opt, decoder, idx_to_word, word_to_idx),
+                                               osp.join(opt.data_folder, opt.train_file), opt, idx_to_word)
     vprint("Novelty: {}".format(novelty), opt.verbosity, 0)
     save_novelties(full_scores)
     return novelty
@@ -642,24 +642,3 @@ def file_len(fname):
         for i, l in enumerate(f):
             pass
     return i + 1
-
-
-if __name__ == "__main__":
-    opt = parse_arguments()
-    opt = predefined(opt)
-    print_flags(opt)
-
-    # Set script info so this can be used without having to think about this setting
-    opt.script = "generative"
-
-    if not osp.isdir(opt.out_folder):
-        os.makedirs(opt.out_folder)
-
-    if opt.mode == 'train':
-        train(opt)
-    elif opt.mode == 'test':
-        test(opt)
-    elif opt.mode == 'generate':
-        generate_data(opt)
-    else:
-        raise UnknownArgumentError("--mode not recognized, please choose: [train, test, generate].")

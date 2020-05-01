@@ -10,6 +10,9 @@ if toplevel_path not in sys.path:
 from util.error import UnknownArgumentError  # noqa:402
 from dataset.penn_treebank.extract_data import get_stats  # noqa:402
 
+__author__ = "Tom Pelsmaeker"
+__copyright__ = "Copyright 2020"
+
 
 def predefined(opt):
     """
@@ -33,7 +36,8 @@ def predefined(opt):
 
     # When a penn treebank Preprocessing type is specified we select the correct data and out folders
     if opt.ptb_type:
-        warn("Paths to data and out folder and v_dim are automatically set given the selected ptb_type: {}. User requested paths are ignored. To change this behavior, don't set any ptb_type.".format(opt.ptb_type))
+        warn("Paths to data and out folder and v_dim are automatically set given the selected ptb_type: {}. \
+             User requested paths are ignored. To change this behavior, don't set any ptb_type.".format(opt.ptb_type))
         opt = set_ptb_folders(opt)
 
     # Multiple modes are joined into a single string
@@ -44,7 +48,8 @@ def predefined(opt):
     if not opt.pre_def:
         return opt
     else:
-        warn("Predefined settings are used. Some user requested settings may be ignored. To change this behavior, set --pre_def=0 (the default).")
+        warn("Predefined settings are used. Some user requested settings may be ignored. To change this behavior, \
+             set --pre_def=0 (the default).")
 
     # Personal preferences across all models
     opt.verbosity = 1  # We like to see some info
@@ -67,7 +72,7 @@ def predefined(opt):
     opt.layers = 2
     opt.h_dim = 256
     opt.x_dim = 256
-    opt.cut_off = 0.03
+    opt.cut_off = 3
     opt = compute_seq_len(opt)
     opt.rnn_type = "GRU"
     opt.drop_type = "shared"
@@ -84,7 +89,8 @@ def set_ptb_folders(opt):
     elif opt.ptb_type == "mik":
         opt.data_folder = osp.join(toplevel_path, "dataset/penn_treebank")
         opt.out_folder = osp.join(toplevel_path, "out/penn_treebank")
-        opt.v_dim = 10002
+        # opt.v_dim = 10002
+        opt.v_dim = 25643
     else:
         raise UnknownArgumentError("Unknown ptb_type {}. Please choose [mik, dyer]".format(opt.ptb_type))
     return opt

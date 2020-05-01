@@ -9,7 +9,6 @@ import os.path as osp
 import sys
 
 import numpy as np
-import math
 import torch
 from torch.utils.data import Dataset
 
@@ -21,7 +20,7 @@ if toplevel_path not in sys.path:
 from util.error import InvalidLengthError  # noqa: E402
 
 __author__ = "Tom Pelsmaeker"
-__copyright__ = "Copyright 2018"
+__copyright__ = "Copyright 2020"
 
 
 class SimpleTextData(Dataset):

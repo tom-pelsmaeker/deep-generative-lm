@@ -1,9 +1,9 @@
 # Tested on these versions, might work with different versions as well.
-pyter >= 0.2.2.1
 numpy >= 1.14.2
 gpyopt >= 1.2.5
 tensorboardX >= 1.2
 pandas >= 0.23.4
 nltk >= 3.2.5
 scipy >= 1.0.1
-torch >= 1.0.1.post2  
+torch >= 1.0.1.post2
+matplotlib >= 3.2.1

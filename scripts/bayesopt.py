@@ -1,10 +1,8 @@
 """Bayesian Optimization on model parameters using GPyOpt."""
+import os
 import os.path as osp
 import sys
-from copy import deepcopy
-from argparse import Namespace
 import pickle
-from random import shuffle
 
 import GPyOpt
 import GPy
@@ -19,7 +17,10 @@ if toplevel_path not in sys.path:
 from scripts.generative import train, test, novelty, qualitative  # noqa: E402
 from util.display import print_flags  # noqa: E402
 from util.predefined import predefined  # noqa: E402
-from util.error import UnknownArgumentError, InvalidArgumentError  # noqa: E402
+from util.error import UnknownArgumentError  # noqa: E402
+
+__author__ = "Tom Pelsmaeker"
+__copyright__ = "Copyright 2020"
 
 
 class OptimizationFunction():
@@ -72,6 +73,7 @@ class OptimizationFunction():
         return y
 
     def re_test(self, run_ids):
+        """Re-tests previous runs of BayesOpt."""
         self.opt.script = "generative"
         self.opt.mode = 'test'
         for run in run_ids:
@@ -86,6 +88,7 @@ class OptimizationFunction():
                 self.opt.use_test_set = 0
 
     def novelty(self, run_ids):
+        """Runs the novelty script for previous runs of BayesOpt."""
         self.opt.script = "generative"
         self.opt.mode = 'novelty'
         for run in run_ids:
@@ -95,6 +98,7 @@ class OptimizationFunction():
             self._store_stats(nov, vars(self.opt), nov)
 
     def qualitative(self, run_ids):
+        """Runs the qualitative script for previous runs of BayesOpt."""
         self.opt.script = "generative"
         self.opt.mode = 'qualitative'
         for run in run_ids:
@@ -103,6 +107,7 @@ class OptimizationFunction():
             qualitative(self.opt)
 
     def _store_stats(self, stats, opt_dict, y):
+        """Writes training statistics to a file."""
         with open(self.out_file, 'a') as f:
             f.write("Run: {}\n".format(self.iter))
             f.write("Bayesopt Value: {}\n".format(y))
@@ -116,9 +121,13 @@ class OptimizationFunction():
         """Maps arguments from a float value to the required format.
 
         This function is required because the GpyOpt tools only search over float values. However, many
-        arguments (settings) we may wish to search over have different types, e.g. str, so we require a deterministic mapping. This function covers all settings searched over (Grid or Bayesian) in the paper, but is non-exhaustive. Novel settings may have to be added.
+        arguments (settings) we may wish to search over have different types, e.g. str,
+        so we require a deterministic mapping.
+        This function covers all settings searched over (Grid or Bayesian) in the paper, but is non-exhaustive.
+        Novel settings may have to be added.
         """
-        if param in ["layers", "h_dim", "x_dim", "v_dim", "z_dim", "enc_h_dim", "enc_layers", "stop_ticks", "flow_depth", "flow", "num_weights", "tie_in_out", "lagrangian"]:
+        if param in ["layers", "h_dim", "x_dim", "v_dim", "z_dim", "enc_h_dim", "enc_layers", "stop_ticks",
+                     "flow_depth", "flow", "num_weights", "tie_in_out", "lagrangian"]:
             value = int(value)
         if param == "ann_mode":
             if value == 0.:
@@ -163,11 +172,8 @@ class OptimizationFunction():
             value = 10. ** value
         if param == "k":
             value = 3.5 ** value
-        if param == "num_rate_check":
-            value = int(10. ** value)
-        if param == "warm_up_rate":
-            value = int(10. ** value)
-        if param in ["p", "cut_off", 'kl_step', 'word_p', 'beta', 'lamb' 'min_rate', 'enc_p', 'k', 'hinge_weight', "word_step", "rate_increment", "enc_word_p"]:
+        if param in ["p", "cut_off", 'kl_step', 'word_p', 'beta', 'lamb' 'min_rate', 'enc_p', 'k', 'hinge_weight',
+                     "word_step", "enc_word_p", "max_elbo", "max_mmd", "alpha"]:
             # We don't want to get lost in small increments
             value = round(value, 5)
 
@@ -214,14 +220,18 @@ def get_parameters(opt):
         X_init.append([256., 128., 512., 256.])  # Number of hidden units
         X_init.append([0.2, 0.1, 0.3, 0.4])  # Dropout
         X_init.append([1., 2., 4., 3.])  # Number of standard deviations above mean sentence length to truncate
-
-        # for param in X_init:
-        #     shuffle(param)
-        X_init = np.array(X_init).T
-        print(X_init)
+    elif "lagvae" in opt.bayes_mode:
+        parameters = [{'name': 'max_elbo', 'type': 'continuous', 'domain': (100, 140)},
+                      {'name': 'max_mmd', 'type': 'continuous', 'domain': (1, 20)},
+                      {'name': 'alpha', 'type': 'continuous', 'domain': (-100, -1)}
+                      ]
+        X_init.append([100., 130., 110., 120.])  # Maximum -ELBO value
+        X_init.append([5., 10., 7., 13.])  # Maximum MMD
+        X_init.append([-10., -5., -25., -1.])  # Weight of information preference
     else:
         raise UnknownArgumentError(
             "Uknown bayes mode: {}. Please choose another or specify this one yourself.")
+    X_init = np.array(X_init).T
 
     if opt.bayes_load:
         # Load previously stored results as initialization for Bayesian search
@@ -229,13 +239,27 @@ def get_parameters(opt):
                                            "bayesian_X_{}.pickle".format(opt.bayes_mode)), 'rb'))
         Y_init = pickle.load(open(osp.join(opt.out_folder, "bayesian",
                                            "bayesian_Y_{}.pickle".format(opt.bayes_mode)), 'rb'))
+    print(X_init)
 
     tuning_list = [d['name'] for d in parameters]
     return parameters, tuning_list, X_init, Y_init
 
 
 def optimize_bayesian(opt, parser):
+    """
+    Main script for Bayesian optimisation.
+
+    In default mode, this script runs Bayesian optimisation for a given number of steps.
+    Each optimisation is one full training run, each run having the same parameters except for the ones defined in
+    get_parameters() with the bayes_mode argument. The optimisation will automatically find the best values for those
+    parameters.
+
+    The script can also be used to run other scripts (test, novelty, qualitative) on models previously trained.
+    """
     parameters, tuning_list, X_init, Y_init = get_parameters(opt)
+
+    if not osp.isdir(osp.join(opt.out_folder, "bayesian")):
+        os.makedirs(osp.join(opt.out_folder, "bayesian"))
 
     if not opt.retest:
         custom_file = osp.join(opt.out_folder, "bayesian", "test_output_{}.txt".format(opt.bayes_mode))
@@ -262,7 +286,8 @@ def optimize_bayesian(opt, parser):
                                  report_file=report_file, evaluations_file=eval_file)
 
         problem.plot_acquisition(osp.join(opt.out_folder, "bayesian", "aquisition_plot_{}.png".format(opt.bayes_mode)))
-        problem.plot_convergence(osp.join(opt.out_folder, "bayesian", "convergence_plot_{}.png".format(opt.bayes_mode)))
+        problem.plot_convergence(osp.join(opt.out_folder, "bayesian",
+                                          "convergence_plot_{}.png".format(opt.bayes_mode)))
         X, Y = problem.get_evaluations()
         pickle.dump(X, open(osp.join(opt.out_folder, "bayesian", "bayesian_X_{}.pickle".format(opt.bayes_mode)), 'wb'))
         pickle.dump(Y, open(osp.join(opt.out_folder, "bayesian", "bayesian_X_{}.pickle".format(opt.bayes_mode)), 'wb'))

@@ -13,7 +13,6 @@ from warnings import warn
 import torch
 from torch import nn
 from torch.nn import Parameter
-import torch.nn.functional as F
 from torch.distributions import Normal, kl_divergence
 from torch_two_sample import MMDStatistic
 # Requires S-VAE pytorch extension https://github.com/tom-pelsmaeker/s-vae-pytorch
@@ -28,9 +27,8 @@ if toplevel_path not in sys.path:
 from model.dropout import FlexibleDropout  # noqa: E402
 from util.error import InvalidArgumentError, UnknownArgumentError  # noqa: E402
 
-
 __author__ = "Tom Pelsmaeker"
-__copyright__ = "Copyright 2018"
+__copyright__ = "Copyright 2020"
 
 
 class BaseDecoder(nn.Module):
@@ -127,7 +125,8 @@ class BaseDecoder(nn.Module):
     @drop_type.setter
     def drop_type(self, value):
         if value not in ["varied", "shared", "recurrent"]:
-            raise UnknownArgumentError("Unknown drop_type: {}. Please choose [varied, shared, recurrent]".format(value))
+            raise UnknownArgumentError(
+                "Unknown drop_type: {}. Please choose [varied, shared, recurrent]".format(value))
         self._drop_type = value
 
     @property
@@ -142,10 +141,10 @@ class BaseDecoder(nn.Module):
 
     def se_pass(self, *argv):
         """Implement the capacity to return embeddings for SentEval into each new model."""
-        raise notImplementedError()
+        raise NotImplementedError()
 
     def sample_sequences(self, *argv):
-        raise notImplementedError()
+        raise NotImplementedError()
 
     def _unpack_data(self, data, N):
         """Unpacks the input data to the forward pass and supplies missing data.
@@ -160,7 +159,6 @@ class BaseDecoder(nn.Module):
             x_len(torch.Tensor): lengths of input sequences or None.
             x_mask(torch.Tensor): mask over the padding of input sequences that are not of max length or None.
             x_reverse(torch.Tensor): batch of reversed input sequences or None.
-            x_len_reverse(torch.Tensor): lengths of reversed input sequences or None.
         """
         # Checks and padding of data, so we have N tensors or None to process
         if not isinstance(data[0], torch.Tensor):
@@ -174,7 +172,7 @@ class BaseDecoder(nn.Module):
 
         # If no mask is given, we create an empty mask as placeholder.
         if N > 2 and data[2] is None:
-            x_mask = torch.ones(data[0].shape).to(self.device)
+            data[2] = torch.ones(data[0].shape).to(self.device)
             if data[1] is not None:
                 warn("Data length is given without mask. Assuming all sentences are of the same length. Sentences shorter than {} words will not be masked.".format(self.seq_len))
 
@@ -182,7 +180,7 @@ class BaseDecoder(nn.Module):
         if N > 3 and data[3] is None:
             warn("Reversed data not provided. We assume no padding and reverse the data cheaply.")
             indices = torch.arange(data[0].shape[1] - 1, -1, -1)
-            data[3] = x_in.index_select(1, indices)
+            data[3] = data[0].index_select(1, indices)
 
         return data
 
@@ -253,10 +251,12 @@ class GenerativeDecoder(BaseDecoder):
     A basic template that defines some methods and properties shared by all generative RNN-type language models.
     """
 
-    def __init__(self, device, seq_len, word_p, word_p_enc, parameter_p, encoder_p, drop_type, min_rate, unk_index, css, N, rnn_type, kl_step,
-                 beta, lamb, mmd, ann_mode, rate_mode, posterior, hinge_weight, ann_word, word_step, v_dim, x_dim, h_dim, s_dim, z_dim, l_dim, h_dim_enc, l_dim_enc, lagrangian, constraint, max_mmd):
-        super(GenerativeDecoder, self).__init__(device, seq_len, word_p, parameter_p,
-                                                drop_type, unk_index, css, N, rnn_type, v_dim, x_dim, h_dim, s_dim, l_dim)
+    def __init__(self, device, seq_len, word_p, word_p_enc, parameter_p, encoder_p, drop_type, min_rate, unk_index,
+                 css, N, rnn_type, kl_step, beta, lamb, mmd, ann_mode, rate_mode, posterior, hinge_weight, ann_word,
+                 word_step, v_dim, x_dim, h_dim, s_dim, z_dim, l_dim, h_dim_enc, l_dim_enc, lagrangian, constraint,
+                 max_mmd, max_elbo, alpha):
+        super(GenerativeDecoder, self).__init__(device, seq_len, word_p, parameter_p, drop_type, unk_index, css, N,
+                                                rnn_type, v_dim, x_dim, h_dim, s_dim, l_dim)
         # Recurrent dropout was never implemented for the VAE's because it doesn't work well
         if self.drop_type == "recurrent":
             raise InvalidArgumentError(
@@ -277,13 +277,14 @@ class GenerativeDecoder(BaseDecoder):
         # Optimization hyperparameters
         self.min_rate = torch.tensor(min_rate, device=self.device, dtype=torch.float)  # minimum Rate of hinge/FB
         self.beta = torch.tensor(beta, device=self.device, dtype=torch.float)  # beta value of beta-VAE
-        self.alpha = torch.tensor(1. - beta, device=self.device, dtype=torch.float)  # alpha value of InfoVAE
+        self.alpha = torch.tensor(alpha, device=self.device, dtype=torch.float)  # alpha value of InfoVAE
         self.lamb = torch.tensor(lamb, device=self.device, dtype=torch.float)  # lambda value of InfoVAE
         self.kl_step = torch.tensor(kl_step, device=self.device, dtype=torch.float)  # Step size of KL annealing
         self.hinge_weight = torch.tensor(hinge_weight, device=self.device, dtype=torch.float)  # Weight of hinge loss
         # Step size of word dropout annealing
         self.word_step = torch.tensor(word_step, device=self.device, dtype=torch.float)
         self.max_mmd = torch.tensor(max_mmd, device=self.device, dtype=torch.float)  # Maximum MMD
+        self.max_elbo = torch.tensor(max_elbo, device=self.device, dtype=torch.float)  # Maximum ELBO
 
         #  Optimization modes
         self.mmd = mmd  # When true, we add the maximum mean discrepancy to the loss, and optimize the InfoVAE
@@ -328,7 +329,7 @@ class GenerativeDecoder(BaseDecoder):
             else:
                 raise InvalidArgumentError('constraint should be a list or str')
         for val in vals:
-            if val not in ['mdr', 'mmd']:
+            if val not in ['mdr', 'mmd', 'elbo']:
                 raise UnknownArgumentError(
                     'constraint {} unknown. Please choose [mdr, mmd].'.format(val))
 
@@ -372,7 +373,8 @@ class GenerativeDecoder(BaseDecoder):
 
     @scale.setter
     def scale(self, val):
-        if not isinstance(val, float) and not isinstance(val, torch.FloatTensor) and not isinstance(val, torch.cuda.FloatTensor):
+        if not isinstance(val, float) and not isinstance(val, torch.FloatTensor) and not \
+                isinstance(val, torch.cuda.FloatTensor):
             raise InvalidArgumentError("scale should be a float.")
 
         if isinstance(val, float):
@@ -484,7 +486,8 @@ class GenerativeDecoder(BaseDecoder):
         if mu_2 is None and var_2 is None:
             return 0.5 * torch.sum((-torch.log(var_1) + var_1 + mu_1 ** 2 - 1) * mask.unsqueeze(dim), dim=dim)
         elif mu_2 is not None and var_2 is not None:
-            return 0.5 * torch.sum((torch.log(var_2) - torch.log(var_1) + var_1 / var_2 + (mu_2 - mu_1) ** 2 / var_2 - 1) * mask.unsqueeze(dim), dim=dim)
+            return 0.5 * torch.sum((torch.log(var_2) - torch.log(var_1) + var_1 / var_2
+                                    + (mu_2 - mu_1) ** 2 / var_2 - 1) * mask.unsqueeze(dim), dim=dim)
         else:
             raise InvalidArgumentError("Either provide mu_2 and var_2 or neither.")
 
@@ -502,7 +505,8 @@ class GenerativeDecoder(BaseDecoder):
         elif mu is None:
             return -0.5 * torch.sum((torch.log(2*np.pi*var) + sample**2 / var) * mask.unsqueeze(dim), dim=dim)
         elif var is None:
-            return -0.5 * torch.sum((torch.log(sample.new_tensor(2*np.pi)) + (sample - mu)**2) * mask.unsqueeze(dim), dim=dim)
+            return -0.5 * torch.sum((torch.log(sample.new_tensor(2*np.pi)) + (sample - mu)**2)
+                                    * mask.unsqueeze(dim), dim=dim)
         else:
             return -0.5 * torch.sum((torch.log(2*np.pi*var) + (sample - mu)**2 / var) * mask.unsqueeze(dim), dim=dim)
 
@@ -521,9 +525,9 @@ class GenerativeDecoder(BaseDecoder):
         """Computes an unbiased estimate of the MMD between two distributions given a set of samples from both."""
         mmd = MMDStatistic(max(2, sample_1.shape[0]), max(2, sample_2.shape[0]))
         if sample_1.shape[0] == 1:
-            return mmd(sample_1.expand(2, -1), sample_2.expand(2, -1), [1. / sample_1.shape[1]])
+            return 10000 * mmd(sample_1.expand(2, -1), sample_2.expand(2, -1), [1. / sample_1.shape[1]])
         else:
-            return mmd(sample_1, sample_2, [1. / sample_1.shape[1]])
+            return 10000 * mmd(sample_1, sample_2, [1. / sample_1.shape[1]])
 
     def _compute_gamma(self, kl):
         """Computes a scale factor for the KL divergence given a desired rate."""
@@ -540,12 +544,13 @@ class GenerativeDecoder(BaseDecoder):
             self._compute_gamma(kl)
 
     def _update_word_p(self):
+        """Updates the word dropout probability."""
         if self.ann_word:
             self.word_p = self.word_p - self.word_step.item()
 
     def q_z_estimate(self, z, mu, var):
-        # z = [S, z_dim], mu = [N, z_dim], var = [N, z_dim]
-        # log_q_z = [S, N]
+        """Computes an estimate of q(z), the marginal posterior."""
+        # z = [S, z_dim], mu = [N, z_dim], var = [N, z_dim], log_q_z = [S, N]
         log_q_z_x = self._sample_log_likelihood(z.unsqueeze(1), torch.tensor(
             [[1.]], device=self.device), dim=2, mu=mu, var=var)
         # [S,]
@@ -553,16 +558,22 @@ class GenerativeDecoder(BaseDecoder):
             torch.log(torch.tensor(log_q_z_x.shape[1], device=self.device, dtype=torch.float))
         return log_q_z
 
-    def _compute_constraint(self, i, constraint, kl, mmd):
+    def _compute_constraint(self, i, constraint, kl, mmd, nll):
+        """Computes a constraint with weight updated with lagrangian relaxation."""
         if constraint == 'mdr':
             # Specifies a minimum desired rate, i.e. KL >= min_rate
             return self.lag_weight[i].abs() * (self.min_rate - kl)
         elif constraint == 'mmd':
             # Specifies a maximum desired MMD, i.e. MMD <= max_mmd
             return self.lag_weight[i].abs() * (mmd - self.max_mmd)
+        elif constraint == 'elbo':
+            # Specifies a maximum desired ELBO, i.e. ELBO <= max_elbo
+            return self.lag_weight[i].abs() * (nll + kl - self.max_elbo) - (self.alpha + 1) * nll - kl
 
-    def _compute_constraints(self, kl, mmd):
-        constraint_loss = 0.
+    def _compute_constraints(self, losses, mmd):
+        """Computes all constraints and adds them together."""
+        losses['Constraint'] = 0.
         for i, constraint in enumerate(self.constraint):
-            constraint_loss += self._compute_constraint(i, constraint, kl, mmd)
-        return constraint_loss
+            losses["Constraint_{}".format(i)] = self._compute_constraint(
+                i, constraint, losses['KL'], mmd, losses['NLL'])
+            losses["Constraint"] += losses["Constraint_{}".format(i)]

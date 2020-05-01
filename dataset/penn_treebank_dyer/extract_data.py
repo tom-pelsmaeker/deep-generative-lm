@@ -1,15 +1,10 @@
 #!/usr/bin/env python3
+
+import pickle
+from collections import Counter
 import sys
 import os
 osp = os.path
-import re
-from collections import Counter, defaultdict
-import pickle
-
-import numpy as np
-import pandas as pd
-from nltk.tree import Tree
-from nltk.corpus import BracketParseCorpusReader
 
 # We include the path of the toplevel package in the system path so we can always use absolute imports within the package.
 toplevel_path = osp.abspath(osp.join(osp.dirname(__file__), '../..'))
@@ -17,6 +12,9 @@ if toplevel_path not in sys.path:
     sys.path.insert(1, toplevel_path)
 
 from util.settings import parse_arguments  # noqa: E402
+
+__author__ = "Tom Pelsmaeker"
+__copyright__ = "Copyright 2020"
 
 
 def parse_orcale_to_sent(file):
@@ -28,6 +26,7 @@ def parse_orcale_to_sent(file):
 
 
 def extract_text_data(old_files, pre_files, new_files, replace, sos, eos, pad):
+    """Extract text from oracle file and apply Dyers preprocessing."""
     counter = Counter()
     sentences = []
     counter.update([replace, sos, eos, pad])
@@ -49,6 +48,7 @@ def extract_text_data(old_files, pre_files, new_files, replace, sos, eos, pad):
 
 
 def extract_original_dyer(oracles, new_files, replace, sos, eos, pad):
+    """Extract text from oracle file that contains Dyers preprocessing."""
     counter = Counter()
     sentences = []
     counter.update([replace, sos, eos, pad])
@@ -56,7 +56,6 @@ def extract_original_dyer(oracles, new_files, replace, sos, eos, pad):
         sentences.append(parse_orcale_to_sent(file))
         counter.update([token for sentence in sentences[i] for token in sentence])
 
-    max_vocab = len(counter)
     for i, file in enumerate(new_files):
         sentences[i] = "\n".join([" ".join([sos] + line + [eos]) for line in sentences[i]])
         with open(file, 'w') as f:

@@ -1,5 +1,8 @@
 """This module contains custom Exceptions for error management."""
 
+__author__ = "Tom Pelsmaeker"
+__copyright__ = "Copyright 2020"
+
 
 class Error(Exception):
     """Base error class, from which all other errors derive."""

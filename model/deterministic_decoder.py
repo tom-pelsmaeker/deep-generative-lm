@@ -5,25 +5,21 @@ A deterministic decoder.
 import numpy as np
 import sys
 import os.path as osp
-from time import time
 from collections import defaultdict
+from warnings import warn
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.autograd import Variable
-from torch.distributions import Normal, Categorical, Bernoulli
-from torch.nn.utils.rnn import pack_padded_sequence, PackedSequence, pad_packed_sequence
+from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
 # We include the path of the toplevel package in the system path so we can always use absolute imports within the package.
 toplevel_path = osp.abspath(osp.join(osp.dirname(__file__), '..'))
 if toplevel_path not in sys.path:
     sys.path.insert(1, toplevel_path)
 
-from util.error import UnknownArgumentError  # noqa: E402
-from model.dropout import FlexibleDropout  # noqa: E402
 from model.base_decoder import BaseDecoder  # noqa: E402
-
+from util.error import InvalidArgumentError  # noqa: E402
 
 __author__ = "Tom Pelsmaeker"
 __copyright__ = "Copyright 2018"
@@ -49,9 +45,10 @@ class DeterministicDecoder(BaseDecoder):
         l_dim(int): number of layers of the RNN.
     """
 
-    def __init__(self, device, seq_len, word_p, parameter_p, drop_type, unk_index, css, sparse, N, rnn_type, tie_in_out, v_dim, x_dim, h_dim, s_dim, l_dim):
-        super(DeterministicDecoder, self).__init__(device, seq_len, word_p, parameter_p,
-                                                   drop_type, unk_index, css, N, rnn_type, v_dim, x_dim, h_dim, s_dim, l_dim)
+    def __init__(self, device, seq_len, word_p, parameter_p, drop_type, unk_index, css, sparse, N, rnn_type,
+                 tie_in_out, v_dim, x_dim, h_dim, s_dim, l_dim):
+        super(DeterministicDecoder, self).__init__(device, seq_len, word_p, parameter_p, drop_type, unk_index, css, N,
+                                                   rnn_type, v_dim, x_dim, h_dim, s_dim, l_dim)
 
         self.tie_in_out = tie_in_out
 
@@ -96,8 +93,7 @@ class DeterministicDecoder(BaseDecoder):
                 tensors with length information and a mask as well, given variable length sequences.
 
         Returns:
-            loss(torch.FloatTensor): computed loss, averaged over the batch, summed over the sequence.
-            kl(torch.FloatTensor): For compatibility with latent variable models; always zero.
+            losses(dict of torch.FloatTensor): computed losses, averaged over the batch, summed over the sequence.
             pred(torch.LongTensor): most probable sequences given the data, as predicted by the model.
         """
         x_in, x_len, x_mask = self._unpack_data(data, 3)
@@ -134,7 +130,8 @@ class DeterministicDecoder(BaseDecoder):
             losses["NLL"] = losses["NLL"].unsqueeze(0)
 
         if extensive:
-            return losses, pred, x.new_tensor([[1, 1]]), x.new_tensor([[1, 1]]), x.new_tensor([[1, 1]]), x.new_tensor([[1, 1]]), x.new_tensor([[1]]),  x.new_tensor([[1]])
+            return losses, pred, x.new_tensor([[1, 1]]), x.new_tensor([[1, 1]]), x.new_tensor([[1, 1]]), \
+                x.new_tensor([[1, 1]]), x.new_tensor([[1]]),  x.new_tensor([[1]])
         else:
             return losses, pred
 

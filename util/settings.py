@@ -1,7 +1,9 @@
 """A parser for command line settings."""
-import sys
 import os.path as osp
 import argparse
+
+__author__ = "Tom Pelsmaeker"
+__copyright__ = "Copyright 2020"
 
 
 def parse_arguments():
@@ -82,10 +84,12 @@ def parse_arguments():
                         help="Step size of KL weight increment per minibatch.")
     parser.add_argument('--beta', default=1.0, type=float,
                         help="Weight of the KL term in the ELBO.")
+    parser.add_argument('--alpha', default=0.0, type=float,
+                        help="Weight of the primal for LagVAE/InfoVAE.")
     parser.add_argument('--lamb', default=0.0, type=float,
                         help="Weight of the MMD loss.")
     parser.add_argument('--mmd', default=0, type=int,
-                        help="Whether to use the MMD between prior and posterio samples as term in the loss.")
+                        help="Whether to use the MMD between prior and posterior samples as term in the loss.")
     parser.add_argument('--ann_mode', default="linear", type=str,
                         help="Which KL annealing scheme to use. Choose [linear, sfb].")
     parser.add_argument('--rate_mode', default="hinge", type=str,
@@ -100,18 +104,14 @@ def parse_arguments():
                         help="Minimum rate of information we wish to encode in the latent space.")
     parser.add_argument('--max_mmd', default=1.0, type=float,
                         help="Maximum mmd between prior and posterior samples.")
-    parser.add_argument('--num_rate_check', default=0.5, type=float,
-                        help="Number of batches after which to update the min_rate. Choose non-integer to turn off.")
-    parser.add_argument('--rate_increment', default=1.0, type=float,
-                        help="Increment to the best KL with adaptive rate.")
-    parser.add_argument('--warm_up_rate', default=5000, type=int,
-                        help="Warm up before updating the rate loss.")
+    parser.add_argument('--max_elbo', default=108.0, type=float,
+                        help="Maximum elbo between prior and posterior samples.")
     parser.add_argument('--word_step', default=0, type=float,
                         help="Step size of word dropout annealing.")
     parser.add_argument('--lagrangian', default=0, type=int,
                         help='Whether to use Lagrangian optimisation scheme.')
-    parser.add_argument('--constraint', default='mdr', type=str, nargs='+',
-                        help='Which constraints to use for Lagrangian optimisation.')
+    parser.add_argument('--constraint', default=['mdr'], type=str, nargs='+',
+                        help='Which constraints to use for Lagrangian optimisation. Choose: [mdr, mmd, elbo]')
 
     # Path settings
     parser.add_argument('--train_file', default='train.indices', type=str,
@@ -204,14 +204,14 @@ def parse_arguments():
     parser.add_argument('--prior', default="weak", type=str,
                         help="Which prior to use. Choose [weak, mog, vamp]")
     parser.add_argument('--num_weights', default=100, type=int,
-                        help="Number of gaussians in MoG prior.")
+                        help="Number of mixture distributions in MoG/Vamp prior.")
     parser.add_argument('--c_dim', default=512, type=int,
                         help="Size of the context vector and flow layers.")
     ###################################################################################################################
 
     # Bayesian Optimization settings
     parser.add_argument('--bayes_load', default=0, type=int,
-                        help="Whether to load stored results from previous bayesian optimization as initial values to seed the optimizer.")
+                        help="Whether to load stored results from previous bayesian optimization as initial values.")
     parser.add_argument('--bayes_iter', default=10, type=int,
                         help="Number of iterations of bayesian optimization.")
     parser.add_argument('--bayes_mode', default="", type=str, nargs='+',

@@ -3,7 +3,6 @@
 from functools import reduce
 import sys
 import os.path as osp
-from random import random
 
 import numpy as np
 import torch
@@ -18,8 +17,11 @@ if toplevel_path not in sys.path:
 
 from util.error import UnknownArgumentError  # noqa: E402
 
+__author__ = "Tom Pelsmaeker"
+__copyright__ = "Copyright 2020"
 
-"""The Functions below are from: https://github.com/napsternxg/pytorch-practice/blob/master/Pytorch%20-%20MMD%20VAE.ipynb"""
+
+"""The function below is from: https://github.com/napsternxg/pytorch-practice/blob/master/Pytorch%20-%20MMD%20VAE.ipynb"""
 
 
 def compute_kernel(x, y):
@@ -41,15 +43,6 @@ def compute_kernel(x, y):
     tiled_y = y.expand(x_size, y_size, dim)
     kernel_input = (tiled_x - tiled_y).pow(2).mean(2)/float(dim)
     return torch.exp(-kernel_input)  # (x_size, y_size)
-
-
-def compute_mmd(x, y):
-    """(Biased) Estimator of the Maximum Mean Discrepancy two sets of samples."""
-    x_kernel = compute_kernel(x, x)
-    y_kernel = compute_kernel(y, y)
-    xy_kernel = compute_kernel(x, y)
-    mmd = x_kernel.mean() + y_kernel.mean() - 2*xy_kernel.mean()
-    return mmd
 
 
 """------------------------------------------------------------------------------------------------------------------"""
@@ -230,7 +223,8 @@ def get_samples(opt, model, idx_to_word, word_to_idx):
     pad_idx = word_to_idx[opt.pad_token]
     try:
         samples = model.sample_sequences(torch.full(
-            [opt.num_samples, 1], word_to_idx[opt.sos_token], dtype=torch.int64, device=opt.device), opt.sample_len, word_to_idx[opt.eos_token], pad_idx, opt.sample_softmax)
+            [opt.num_samples, 1], word_to_idx[opt.sos_token], dtype=torch.int64, device=opt.device),
+            opt.sample_len, word_to_idx[opt.eos_token], pad_idx, opt.sample_softmax)
     except RuntimeError as e:
         raise RuntimeError("Not enough memory to sample.") from e
 
@@ -238,25 +232,3 @@ def get_samples(opt, model, idx_to_word, word_to_idx):
     samples = "\n".join([" ".join([idx_to_word[s] for s in sample if s != pad_idx]) for sample in samples])
 
     return samples, sample_indices
-
-
-class AdaptiveRate():
-    """Adapt the minimum rate for a hinge loss in a model."""
-
-    def __init__(self, opt):
-        self.opt = opt
-        self.prev_elbo = []
-        self.prev_kl = []
-        self.ticker = 0
-
-        if self.opt.kl_step < 1.:
-            self.opt.warm_up_rate = int(1. / self.opt.kl_step)
-
-    def __call__(self, losses, model):
-        """Adapt rate of model to the best observed KL + an increment."""
-        self.prev_elbo.append(losses["NLL"].item() + losses["KL"].item())
-        self.prev_kl.append(losses["KL"].item() / model.scale.item())
-        if self.opt.num_rate_check >= 1.:
-            if self.ticker % self.opt.num_rate_check == 0 and self.ticker > self.opt.warm_up_rate:
-                model.min_rate = self.prev_kl[np.argmin(self.prev_elbo)] + self.opt.rate_increment
-        self.ticker += 1

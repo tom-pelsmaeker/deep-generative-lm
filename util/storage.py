@@ -1,12 +1,11 @@
 """Functions that aid storage and loading of models and data."""
+from torch.utils.data import DataLoader
+import torch
+import pickle
+import random
+import sys
 import os
 osp = os.path
-import sys
-import random
-
-import pickle
-import torch
-from torch.utils.data import DataLoader
 
 # We include the path of the toplevel package in the system path so we can always use absolute imports within the package.
 toplevel_path = osp.abspath(osp.join(osp.dirname(__file__), '..'))
@@ -17,7 +16,9 @@ from dataset.text import TextDataUnPadded  # noqa: E402
 from model.bowman_decoder import BowmanDecoder, FlowBowmanDecoder  # noqa: E402
 from model.deterministic_decoder import DeterministicDecoder  # noqa: E402
 from util.error import UnknownArgumentError, InvalidPathError, Error  # noqa: E402
-from util.display import vprint  # noqa: E402
+
+__author__ = "Tom Pelsmaeker"
+__copyright__ = "Copyright 2020"
 
 
 def seed(opt):
@@ -30,26 +31,34 @@ def seed(opt):
 
 def load_word_index_maps(opt):
     """Loads word to index and index to word mapping given user specified (path) settings."""
-    return pickle.load(open(osp.join(opt.data_folder, opt.word_dict), 'rb')), pickle.load(open(osp.join(opt.data_folder, opt.idx_dict), 'rb'))
+    return pickle.load(open(osp.join(opt.data_folder, opt.word_dict), 'rb')), \
+        pickle.load(open(osp.join(opt.data_folder, opt.idx_dict), 'rb'))
 
 
 def initialize_model(opt, word_to_idx):
     """Initializes model with the given user settings."""
     if opt.model == "bowman":
-        decoder = BowmanDecoder(opt.device, opt.seq_len, opt.kl_step, opt.word_p, opt.enc_word_p, opt.p, opt.enc_p, opt.drop_type, opt.min_rate,
-                                word_to_idx[opt.unk_token], opt.css, opt.sparse, opt.N, opt.rnn_type, opt.tie_in_out,
-                                opt.beta, opt.lamb, opt.mmd, opt.ann_mode, opt.rate_mode, opt.posterior, opt.hinge_weight, opt.k, opt.ann_word, opt.word_step,
-                                opt.v_dim, opt.x_dim, opt.h_dim, opt.z_dim, opt.s_dim, opt.layers, opt.enc_h_dim, opt.enc_layers, opt.lagrangian, opt.constraint, opt.max_mmd).to(opt.device)
+        decoder = BowmanDecoder(opt.device, opt.seq_len, opt.kl_step, opt.word_p, opt.enc_word_p, opt.p, opt.enc_p,
+                                opt.drop_type, opt.min_rate, word_to_idx[opt.unk_token], opt.css, opt.sparse, opt.N,
+                                opt.rnn_type, opt.tie_in_out, opt.beta, opt.lamb, opt.mmd, opt.ann_mode,
+                                opt.rate_mode, opt.posterior, opt.hinge_weight, opt.k, opt.ann_word, opt.word_step,
+                                opt.v_dim, opt.x_dim, opt.h_dim, opt.z_dim, opt.s_dim, opt.layers, opt.enc_h_dim,
+                                opt.enc_layers, opt.lagrangian, opt.constraint, opt.max_mmd, opt.max_elbo,
+                                opt.alpha).to(opt.device)
     elif opt.model == "flowbowman":
-        decoder = FlowBowmanDecoder(opt.device, opt.seq_len, opt.kl_step, opt.word_p, opt.enc_word_p, opt.p, opt.enc_p, opt.drop_type, opt.min_rate,
-                                    word_to_idx[opt.unk_token], opt.css, opt.sparse, opt.N, opt.rnn_type, opt.tie_in_out,
-                                    opt.beta, opt.lamb, opt.mmd, opt.ann_mode, opt.rate_mode, opt.posterior, opt.hinge_weight, opt.k, opt.ann_word, opt.word_step,
-                                    opt.flow, opt.flow_depth, opt.h_depth, opt.prior, opt.num_weights, opt.mean_len, opt.std_len,
-                                    opt.v_dim, opt.x_dim, opt.h_dim, opt.z_dim, opt.s_dim, opt.layers, opt.enc_h_dim, opt.enc_layers, opt.c_dim, opt.lagrangian, opt.constraint, opt.max_mmd).to(opt.device)
+        decoder = FlowBowmanDecoder(opt.device, opt.seq_len, opt.kl_step, opt.word_p, opt.enc_word_p, opt.p, opt.enc_p,
+                                    opt.drop_type, opt.min_rate, word_to_idx[opt.unk_token], opt.css, opt.sparse, opt.N,
+                                    opt.rnn_type, opt.tie_in_out, opt.beta, opt.lamb, opt.mmd, opt.ann_mode,
+                                    opt.rate_mode, opt.posterior, opt.hinge_weight, opt.k, opt.ann_word, opt.word_step,
+                                    opt.flow, opt.flow_depth, opt.h_depth, opt.prior, opt.num_weights, opt.mean_len,
+                                    opt.std_len, opt.v_dim, opt.x_dim, opt.h_dim, opt.z_dim, opt.s_dim, opt.layers,
+                                    opt.enc_h_dim, opt.enc_layers, opt.c_dim, opt.lagrangian, opt.constraint,
+                                    opt.max_mmd, opt.max_elbo, opt.alpha).to(opt.device)
     elif opt.model == "deterministic":
         decoder = DeterministicDecoder(opt.device, opt.seq_len, opt.word_p, opt.p, opt.drop_type,
-                                       word_to_idx[opt.unk_token], opt.css, opt.sparse, opt.N, opt.rnn_type, opt.tie_in_out,
-                                       opt.v_dim, opt.x_dim, opt.h_dim, opt.s_dim, opt.layers).to(opt.device)
+                                       word_to_idx[opt.unk_token], opt.css, opt.sparse, opt.N, opt.rnn_type,
+                                       opt.tie_in_out, opt.v_dim, opt.x_dim, opt.h_dim, opt.s_dim,
+                                       opt.layers).to(opt.device)
     else:
         raise UnknownArgumentError(
             "--model not recognized, please choose: [deterministic, bowman, flowbowman].")
@@ -60,19 +69,23 @@ def initialize_model(opt, word_to_idx):
 def initialize_dataloader(opt, word_to_idx, collate_fn):
     """Initializes the dataloader with the given user settings and collate function."""
     if opt.mode in ['train', 'qualitative']:
-        data_train = DataLoader(TextDataUnPadded(get_true_data_path(opt, "train")[1], opt.seq_len, word_to_idx[opt.pad_token]),
-                                collate_fn=collate_fn, batch_size=opt.batch_size, shuffle=True, num_workers=4, pin_memory=True)
+        data_train = DataLoader(TextDataUnPadded(get_true_data_path(opt, "train")[1], opt.seq_len,
+                                                 word_to_idx[opt.pad_token]), collate_fn=collate_fn,
+                                batch_size=opt.batch_size, shuffle=True, num_workers=4, pin_memory=True)
         data_eval = DataLoader(TextDataUnPadded(get_true_data_path(opt, "valid")[1], 0, word_to_idx[opt.pad_token]),
-                               collate_fn=collate_fn, batch_size=opt.batch_size, shuffle=True, num_workers=4, pin_memory=True)
+                               collate_fn=collate_fn, batch_size=opt.batch_size, shuffle=True, num_workers=4,
+                               pin_memory=True)
         return data_train, data_eval
     elif opt.mode == 'test':
         # We use the PTB test set only sparsly
         if opt.use_test_set:
             return DataLoader(TextDataUnPadded(get_true_data_path(opt, "test")[1], 0, word_to_idx[opt.pad_token]),
-                              collate_fn=collate_fn, batch_size=opt.batch_size, shuffle=False, num_workers=4, pin_memory=True)
+                              collate_fn=collate_fn, batch_size=opt.batch_size, shuffle=False, num_workers=4,
+                              pin_memory=True)
         else:
             return DataLoader(TextDataUnPadded(get_true_data_path(opt, "valid")[1], 0, word_to_idx[opt.pad_token]),
-                              collate_fn=collate_fn, batch_size=opt.batch_size, shuffle=False, num_workers=4, pin_memory=True)
+                              collate_fn=collate_fn, batch_size=opt.batch_size, shuffle=False, num_workers=4,
+                              pin_memory=True)
 
     else:
         raise UnknownArgumentError(
@@ -84,7 +97,8 @@ def save_checkpoint(opt, model, optimizers, epoch, suffix=""):
     checkpoint = {
         'epoch': epoch,
         'model': model.state_dict(),
-        'optimizer': [optimizer.state_dict() for optimizer in optimizers] if isinstance(optimizers, list) else optimizers.state_dict(),
+        'optimizer': [optimizer.state_dict() for optimizer in optimizers] if isinstance(optimizers, list)
+        else optimizers.state_dict(),
         'kl_scale': model._scale if hasattr(model, 'scale') else 1.0,
         'opt': opt
     }
@@ -125,6 +139,7 @@ def load_options(opt):
                 opt.ann_word = resumed_opt.ann_word
                 opt.word_p = resumed_opt.word_p
                 opt.kl_step = resumed_opt.kl_step
+                opt.alpha = resumed_opt.alpha
                 opt.beta = resumed_opt.beta
                 opt.lamb = resumed_opt.lamb
                 opt.mmd = resumed_opt.mmd
@@ -134,9 +149,8 @@ def load_options(opt):
                 opt.hinge_weight = resumed_opt.hinge_weight
                 opt.k = resumed_opt.k
                 opt.min_rate = resumed_opt.min_rate
-                opt.num_rate_check = resumed_opt.num_rate_check
-                opt.rate_increment = resumed_opt.rate_increment
-                opt.warm_up_rate = resumed_opt.warm_up_rate
+                opt.max_mmd = resumed_opt.max_mmd
+                opt.max_elbo = resumed_opt.max_elbo
                 opt.word_step = resumed_opt.word_step
 
                 opt.z_dim = resumed_opt.z_dim
@@ -201,7 +215,7 @@ def load_checkpoint(opt, model, optimizers):
         elif isinstance(optimizers, list):
             optimizers[0].load_state_dict(checkpoint['optimizer'])
         else:
-            a = [optimizers.load_state_dict(checkpoint['optimizer'])]
+            optimizers.load_state_dict(checkpoint['optimizer'])
 
         epoch = checkpoint['epoch']
     return model, optimizers, epoch

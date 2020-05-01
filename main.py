@@ -1,11 +1,5 @@
 #!/usr/bin/env python3
-"""
-This scripts trains a stochastic decoder as defined in "A Stochastic Decoder for Neural Machine Translation" (under submission) in a monolingual context (without source Encoder). The model is built with the PyTorch neural network library, version 1.0.1
-"""
-
-import logging
 import os
-osp = os.path
 
 from scripts.generative import train, test, generate_data, novelty, qualitative
 from scripts.bayesopt import optimize_bayesian
@@ -15,8 +9,10 @@ from util.predefined import predefined
 from util.display import print_flags
 from util.settings import parse_arguments
 
+osp = os.path
+
 __author__ = "Tom Pelsmaeker"
-__copyright__ = "Copyright 2018"
+__copyright__ = "Copyright 2020"
 
 
 def main():

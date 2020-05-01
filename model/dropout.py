@@ -1,6 +1,9 @@
 from torch import nn
 from torch.distributions import Bernoulli
 
+__author__ = "Tom Pelsmaeker"
+__copyright__ = "Copyright 2020"
+
 
 class FlexibleDropout(nn.Module):
     """FlexibleDropout disconnects the sampling step from the masking step of dropout.

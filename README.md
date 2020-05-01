@@ -9,6 +9,7 @@ To start experimenting, clone the repository to your local device and install th
 - pip install -r __requirements.txt__
 - __hyperspherical_vae__: the code was tested with [this fork](https://github.com/tom-pelsmaeker/s-vae-pytorch), get the latest version from [here](https://github.com/nicola-decao/s-vae-pytorch).
 - [__torch_two_sample__](https://github.com/josipd/torch-two-sample)
+- [__pyter__](https://github.com/aflc/pyter)
 
 ## Quick Start
 1. Download and pre-process the Penn Treebank data, see the [data folder](https://github.com/tom-pelsmaeker/deep-generative-lm/tree/master/dataset).
@@ -24,24 +25,28 @@ To start experimenting, clone the repository to your local device and install th
 ```
 ./main.py --model bowman --mode train --pre_def 1 --ptb_type mik --lagrangian 1 --min_rate 5 --save_suffix mdr
 ```
-5. Train a SenVAE with IAF flow and a target rate of 5, using MDR:
+5. Train a SenVAE with MoG prior and a target rate of 5, using MDR:
 ```
-./main.py --model flowbowman --flow iaf --mode train --pre_def 1 --ptb_type mik --lagrangian 1 --min_rate 5 --save_suffix iaf
+./main.py --model flowbowman --prior mog --mode train --pre_def 1 --ptb_type mik --lagrangian 1 --min_rate 5 --save_suffix mog
 ```
 6. Evaluate the models:
 ```
 ./main.py --model deterministic --mode test --pre_def 1 --ptb_type mik
 ./main.py --model bowman --mode test --pre_def 1 --ptb_type mik
 ./main.py --model bowman --mode test --pre_def 1 --ptb_type mik --lagrangian 1 --min_rate 5 --save_suffix mdr
-./main.py --model flowbowman --flow iaf --mode test --pre_def 1 --ptb_type mik --lagrangian 1 --min_rate 5 --save_suffix iaf
+./main.py --model flowbowman --prior mog --mode test --pre_def 1 --ptb_type mik --lagrangian 1 --min_rate 5 --save_suffix mog
 ```
 6. Print some samples:
 ```
 ./main.py --model deterministic --mode qualitative --pre_def 1 --ptb_type mik
 ./main.py --model bowman --mode qualitative --pre_def 1 --ptb_type mik
 ./main.py --model bowman --mode qualitative --pre_def 1 --ptb_type mik --lagrangian 1 --min_rate 5 --save_suffix mdr
-./main.py --model flowbowman --flow iaf --mode qualitative --pre_def 1 --ptb_type mik --lagrangian 1 --min_rate 5 --save_suffix iaf
+./main.py --model flowbowman --prior mog --mode qualitative --pre_def 1 --ptb_type mik --lagrangian 1 --min_rate 5 --save_suffix mog
 ```
+
+## Yahoo and Yelp experiments
+We used a fork of the `vae-lagging-encoder` repo to run the experiments on Yahoo and Yelp data.
+Please use the submodule to recreate the experiments, it has been modified for training with MDR and the MoG prior.
 
 ## Structure
 - [main.py](https://github.com/tom-pelsmaeker/deep-generative-lm/blob/master/main.py): the main script that handles all command line arguments.
@@ -57,7 +62,7 @@ There are many command line settings available to tweak the experimental setup. 
 --mode: [train|test|novelty|qualitative] select in which mode to run the generative script.
 --save_suffix: to give your model a name.
 --seed: set a random seed.
---model: [deterministic|bowman|flowbowman] the model to use. Deterministic refers to the RNNLM, bowman to the SenVAE and flowbowman to the SenVAE with expressive latent model.
+--model: [deterministic|bowman|flowbowman] the model to use. Deterministic refers to the RNNLM, bowman to the SenVAE and flowbowman to the SenVAE with expressive latent structure.
 --lagrangian: set to 1 to use the MDR objective.
 --min_rate: specify a minimum rate, in nats.
 --flow: [diag|iaf|vpiaf|planar] the type of flow to use with the flowbowman model.
@@ -68,9 +73,6 @@ There are many command line settings available to tweak the experimental setup. 
 --pre_def: set to 1 to use encoder-decoder hyperparameters that match the ones in the paper.
 --local_rank: which GPU to use. Set to -1 to run on CPU.
 ```
-
-## Further Usage Examples
-__TODO__
 
 ## Citation
 If you use this code in your project, please cite:

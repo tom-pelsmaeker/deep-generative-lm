@@ -5,11 +5,10 @@ Simple FeedForward networks to estimate parameters of latent Gaussian distributi
 import sys
 import os.path as osp
 
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.nn.utils.rnn import pack_padded_sequence, PackedSequence, pad_packed_sequence
+from torch.nn.utils.rnn import pack_padded_sequence
 from torch.autograd import Function
 
 # We include the path of the toplevel package in the system path so we can always use absolute imports within the package.
@@ -17,7 +16,7 @@ toplevel_path = osp.abspath(osp.join(osp.dirname(__file__), '..'))
 if toplevel_path not in sys.path:
     sys.path.insert(1, toplevel_path)
 
-from model.dropout import FlexibleDropout
+from model.dropout import FlexibleDropout  # noqa: E402
 
 __author__ = "Tom Pelsmaeker"
 __copyright__ = "Copyright 2018"

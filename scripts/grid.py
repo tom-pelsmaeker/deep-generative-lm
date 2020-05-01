@@ -1,25 +1,19 @@
-"""Gridsearch utility."""
+"""Grid search utility."""
 import os.path as osp
 import sys
-from copy import deepcopy
-from argparse import Namespace
-import pickle
-from random import shuffle
 
 import numpy as np
-import GPy
-import GPyOpt
 
 # We include the path of the toplevel package in the system path so we can always use absolute imports within the package.
 toplevel_path = osp.abspath(osp.join(osp.dirname(__file__), '..'))
 if toplevel_path not in sys.path:
     sys.path.insert(1, toplevel_path)
 
-from scripts.generative import train, test  # noqa: E402
 from scripts.bayesopt import OptimizationFunction  # noqa: E402
-from util.display import print_flags  # noqa: E402
-from util.predefined import predefined  # noqa: E402
-from util.error import UnknownArgumentError, InvalidArgumentError  # noqa: E402
+from util.error import UnknownArgumentError  # noqa: E402
+
+__author__ = "Tom Pelsmaeker"
+__copyright__ = "Copyright 2020"
 
 
 class GridFunction(OptimizationFunction):
@@ -42,7 +36,7 @@ class GridFunction(OptimizationFunction):
 
 
 def get_parameters(opt):
-    """Add desired parameter lists and initial search space to this function."""
+    """Add desired parameter lists and search space to this function."""
     parameters = list()
     X_init = list()
     if "mdr_example" in opt.bayes_mode:
@@ -51,7 +45,7 @@ def get_parameters(opt):
         X_init.append([5., 10., 15., 20., 25., 30., 35., 40., 45., 50.])
     else:
         raise UnknownArgumentError(
-            "Uknown bayes mode: {}. Please choose another or specify this one yourself.")
+            "Uknown bayes mode: {}. Please choose another or specify one yourself.")
 
     X_init = np.array(X_init).T
     print(X_init)
@@ -60,6 +54,7 @@ def get_parameters(opt):
 
 
 def run_grid(opt, parser):
+    """Runs a grid search over a bunch of pre-specified parameter values."""
     parameters, X = get_parameters(opt)
 
     if not opt.retest:
@@ -80,7 +75,3 @@ def run_grid(opt, parser):
         custom_file = osp.join(opt.out_folder, "grid", "test_output_{}_qualitative.txt".format(opt.bayes_mode))
         func = GridFunction(parameters, opt, parser, custom_file, opt.start_iter)
         func.qualitative(opt.reruns)
-
-
-if __name__ == '__main__':
-    run_grid(None, None)

@@ -1,14 +1,7 @@
 """Functions that manage what output is displayed."""
 
-import os.path as osp
-import sys
-
-# We include the path of the toplevel package in the system path so we can always use absolute imports within the package.
-toplevel_path = osp.abspath(osp.join(osp.dirname(__file__), '..'))
-if toplevel_path not in sys.path:
-    sys.path.insert(1, toplevel_path)
-
-from util.error import InvalidArgumentError
+__author__ = "Tom Pelsmaeker"
+__copyright__ = "Copyright 2020"
 
 
 def vprint(message, verbosity, verbosity_required, end=None):

@@ -16,6 +16,9 @@ if toplevel_path not in sys.path:
 
 from util.settings import parse_arguments  # noqa: E402
 
+__author__ = "Tom Pelsmaeker"
+__copyright__ = "Copyright 2020"
+
 
 def convert_to_indices(files, max_vocab, replace, sos, eos, pad):
     counter = Counter()

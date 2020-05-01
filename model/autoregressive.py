@@ -29,10 +29,8 @@ Parts of the code below are adapted from: https://github.com/riannevdberg/sylves
 ##################################################################################
 """
 
-import math
 import sys
 import os.path as osp
-from warnings import warn
 
 import torch
 import torch.nn as nn
@@ -45,19 +43,23 @@ toplevel_path = osp.abspath(osp.join(osp.dirname(__file__), '..'))
 if toplevel_path not in sys.path:
     sys.path.insert(1, toplevel_path)
 
-from util.error import UnknownArgumentError, InvalidArgumentError  # noqa: E402
+from util.error import InvalidArgumentError  # noqa: E402
+
+__author__ = "Tom Pelsmaeker"
+__copyright__ = "Copyright 2020"
 
 
 class AutoregressiveLinear(nn.Module):
     """Simple autoregressive Linear layer.
 
     This network is a drop-in for a linear layer with autoregressive properties. As such, it is convenient to use
-    for normalizing flows, as the determinant of such an autoregressive layer will evaluate to zero (when the weight matrix is square).
+    for normalizing flows, as the determinant of such an autoregressive layer will evaluate to zero
+    (when the weight matrix is square).
 
     Args:
         in_dim(int): size of the input of this layer.
         out_dim(int): size of the output of this layer.
-        diag(str): When 'zero', zeros on the diagonal, when 'one', ones on the diagonal, else parameters on the diagonal.
+        diag(str): When 'zero', zeros on the diagonal, when 'one', ones, else parameters.
         bias(bool): whether to use a bias vector. Defaults to True
     """
 
@@ -252,6 +254,7 @@ class NormalizingFlow(nn.Module):
 
 
 class Planar(NormalizingFlow):
+    """Planar Normalizing flow with single unit bottleneck."""
 
     def __init__(self, h_dim, z_dim, flow_depth):
         super(Planar, self).__init__(h_dim, z_dim, flow_depth, 0)
